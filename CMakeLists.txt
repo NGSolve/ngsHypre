@@ -14,6 +14,12 @@ ExternalProject_Add(hypre GIT_REPOSITORY https://github.com/hypre-space/hypre.gi
                          SOURCE_SUBDIR src
                          )
 
+ExternalProject_Get_Property(hypre INSTALL_DIR)
+
+# TODO: get include dir + library
+# TODO: dependencies: first build hypre, and then interface
+
+
 ###############################################################################
 # STOP editing here
 ###############################################################################
