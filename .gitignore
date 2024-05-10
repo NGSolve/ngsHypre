@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+_skbuild
+build
+hypre
+*.egg-info
+.cache

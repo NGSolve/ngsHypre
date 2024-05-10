@@ -1,10 +1,9 @@
 from skbuild import setup
 
-import sys
 _cmake_args = []
 
 setup(
-    name="ngsHypre",
+    name="ngs_hypre",
     version="1.0.0",
     author="NGSolve",
     license="MIT",

@@ -5,6 +5,6 @@
 
 
 
-PYBIND11_MODULE(ngsHypre, m) {
+PYBIND11_MODULE(ngs_hypre, m) {
   cout << "Loading ngsHypre preconditioner" << endl;
 }
