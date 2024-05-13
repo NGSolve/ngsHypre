@@ -34,3 +34,4 @@ if(NOT hypre_POPULATED)
 endif()
 
 target_link_libraries(${module_name} PRIVATE HYPRE)
+set_target_properties(HYPRE PROPERTIES POSITION_INDEPENDENT_CODE ON)

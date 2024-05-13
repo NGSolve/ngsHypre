@@ -1,4 +1,3 @@
-#ifdef HYPRE
 /*********************************************************************/
 /* File:   hypre_precond.cpp                                         */
 /* Author: Martin Huber, Joachim Schoeberl                           */
@@ -9,6 +8,7 @@
 
 #include <solve.hpp>
 #include "hypre_precond.hpp"
+#include <core/ng_mpi_native.hpp>
 
 namespace ngcomp
 {
@@ -89,8 +89,8 @@ namespace ngcomp
 	global_nums[i] = num_master_dofs++;
     
     Array<int> first_master_dof(ntasks);
-    MPI_Allgather (&num_master_dofs, 1, MPI_INT, 
-		   &first_master_dof[0], 1, MPI_INT, 
+    NG_MPI_Allgather (&num_master_dofs, 1, NG_MPI_INT,
+		   &first_master_dof[0], 1, NG_MPI_INT,
 		   pardofs -> GetCommunicator());
     
     int num_glob_dofs = 0;
@@ -113,7 +113,7 @@ namespace ngcomp
     ilower = first_master_dof[id];
     iupper = first_master_dof[id+1]-1;
    
-    HYPRE_IJMatrixCreate(comm, ilower, iupper, ilower, iupper, &A);
+    HYPRE_IJMatrixCreate(NG_MPI_Native(comm), ilower, iupper, ilower, iupper, &A);
     HYPRE_IJMatrixSetObjectType(A, HYPRE_PARCSR);
     HYPRE_IJMatrixInitialize(A);
    
@@ -182,11 +182,11 @@ namespace ngcomp
     HYPRE_IJVector x;
     HYPRE_ParVector par_x;
 
-    HYPRE_IJVectorCreate(comm, ilower, iupper,&b);
+    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper,&b);
     HYPRE_IJVectorSetObjectType(b, HYPRE_PARCSR);
     HYPRE_IJVectorInitialize(b);
 
-    HYPRE_IJVectorCreate(comm, ilower, iupper,&x);
+    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper,&x);
     HYPRE_IJVectorSetObjectType(x, HYPRE_PARCSR);
     HYPRE_IJVectorInitialize(x);
   
@@ -261,4 +261,3 @@ namespace ngcomp
 
   static RegisterPreconditioner<HyprePreconditioner> init_hyprepre ("hypre");
 }
-#endif
