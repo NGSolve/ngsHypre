@@ -34,7 +34,6 @@ namespace ngcomp
 
   public:
     
-    // HyprePreconditioner (const PDE & pde, const Flags & flags, const string & name);
     HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs); 
     HyprePreconditioner (shared_ptr<BilinearForm> bfa, const Flags & aflags,
                          const string aname = "precond");

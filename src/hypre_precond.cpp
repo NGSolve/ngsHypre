@@ -75,26 +75,18 @@ namespace ngcomp
     NgMPI_Comm comm = pardofs->GetCommunicator();
     int ndof = pardofs->GetNDofLocal();
 
-    int ntasks = comm.Size();
-    int id = comm.Rank();
-    
-
-    // find global dof enumeration 
     global_nums.SetSize(ndof);
-    if(ndof)
-      global_nums = -1;
+    global_nums = -1;
     int num_master_dofs = 0;
     for (int i = 0; i < ndof; i++)
-      if (pardofs -> IsMasterDof (i) && (!freedofs || freedofs -> Test(i)))
+      if (pardofs->IsMasterDof(i) && (!freedofs || freedofs->Test(i)))
 	global_nums[i] = num_master_dofs++;
     
-    Array<int> first_master_dof(ntasks);
-    NG_MPI_Allgather (&num_master_dofs, 1, NG_MPI_INT,
-		   &first_master_dof[0], 1, NG_MPI_INT,
-		   pardofs -> GetCommunicator());
-    
+    Array<int> first_master_dof(comm.Size());
+    comm.AllGather (num_master_dofs, first_master_dof);
+
     int num_glob_dofs = 0;
-    for (int i = 0; i < ntasks; i++)
+    for (int i = 0; i < first_master_dof.Size(); i++)
       {
 	int cur = first_master_dof[i];
 	first_master_dof[i] = num_glob_dofs;
@@ -102,16 +94,18 @@ namespace ngcomp
       }
     first_master_dof.Append(num_glob_dofs);
 
+    int rank = comm.Rank();
     for (int i = 0; i < ndof; i++)
       if (global_nums[i] != -1)
-	global_nums[i] += first_master_dof[id];
-    
-    ScatterDofData (global_nums, pardofs);
+	global_nums[i] += first_master_dof[rank];
+
+    pardofs->ScatterDofData (global_nums);
+
     cout << IM(3) << "num glob dofs = " << num_glob_dofs << endl;
 	
     // range of my master dofs ...
-    ilower = first_master_dof[id];
-    iupper = first_master_dof[id+1]-1;
+    ilower = first_master_dof[rank];
+    iupper = first_master_dof[rank+1]-1;
    
     HYPRE_IJMatrixCreate(NG_MPI_Native(comm), ilower, iupper, ilower, iupper, &A);
     HYPRE_IJMatrixSetObjectType(A, HYPRE_PARCSR);
@@ -137,7 +131,7 @@ namespace ngcomp
 	    }
 
 	int size = cols_global.Size();
-	HYPRE_IJMatrixAddToValues(A, 1, &size, &row, &cols_global[0], &values_global[0]);
+	HYPRE_IJMatrixAddToValues(A, 1, &size, &row, cols_global.Data(), values_global.Data());
       }
 
     HYPRE_IJMatrixAssemble(A);
@@ -149,7 +143,7 @@ namespace ngcomp
     HYPRE_ParVector par_b = NULL;
     HYPRE_ParVector par_x = NULL;
 
-    HYPRE_BoomerAMGSetPrintLevel(precond, 1);  /* print solve info + parameters */
+    HYPRE_BoomerAMGSetPrintLevel(precond, 0);  /* print solve info + parameters */
     HYPRE_BoomerAMGSetCoarsenType(precond, 10); /* Falgout coarsening */
     HYPRE_BoomerAMGSetRelaxType(precond, 6);  // 3 GS, 6 .. sym GS 
     HYPRE_BoomerAMGSetStrongThreshold(precond, 0.5);
@@ -160,10 +154,12 @@ namespace ngcomp
     HYPRE_BoomerAMGSetMaxLevels(precond, 20);  /* maximum number of levels */
     HYPRE_BoomerAMGSetTol(precond, 0.0);      /* conv. tolerance */
     HYPRE_BoomerAMGSetMaxIter(precond,1);
-     
+
+
+    // with HYPRE_BoomerAMGSetInterpVectors and HYPRE_BoomerAMGSetInterpVecVariant. T
+    
     cout << IM(2) << "Call BoomerAMGSetup" << endl;
     HYPRE_BoomerAMGSetup (precond, parcsr_A, par_b, par_x);
-	
   }
 
 
@@ -255,6 +251,9 @@ namespace ngcomp
       else
 	fu(i) = 0.0;
 
+    HYPRE_IJVectorDestroy(x);
+    HYPRE_IJVectorDestroy(b);
+    
     u.Cumulate();
   }
 
