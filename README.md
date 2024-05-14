@@ -1,5 +1,6 @@
 # ngsHypre
-Hypre - parallel AMG preconditioner interface to NGSolve
+
+This project provides an interface to the MPI-parallel solver package [Hypre](https://hypre.readthedocs.io/en/latest/)
 
 
 Installation:
