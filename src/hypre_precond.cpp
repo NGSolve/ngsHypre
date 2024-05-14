@@ -4,7 +4,7 @@
 /* Date:   July 2012                                                 */
 /*********************************************************************/
 
-
+#define OMPI_SKIP_MPICXX
 
 #include <solve.hpp>
 #include "hypre_precond.hpp"
