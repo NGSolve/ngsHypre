@@ -66,8 +66,9 @@ namespace ngcomp
     static Timer t("hypre setup");
     RegionTimer reg(t);
 
+
     const ParallelMatrix & pmat = (dynamic_cast<const ParallelMatrix&> (matrix));
-    const SparseMatrix<double> & mat = dynamic_cast< const SparseMatrix<double> &>(*pmat.GetMatrix());
+    const SparseMatrix<double> & mat = dynamic_cast<const SparseMatrix<double>&>(*pmat.GetMatrix());
     if (dynamic_cast< const SparseMatrixSymmetric<double> *> (&mat))
       throw Exception ("Please use fully stored sparse matrix for hypre (bf -nonsymmetric)");
 
@@ -101,6 +102,23 @@ namespace ngcomp
 
     pardofs->ScatterDofData (global_nums);
 
+    used_global.SetSize0();
+    used_local.SetSize0();
+    used_my_global.SetSize0();
+    used_my_local.SetSize0();
+
+    for(auto i : Range(global_nums.Size()))
+      if (global_nums[i] != -1)
+	{
+	  used_global.Append(global_nums[i]);
+          used_local.Append(i);
+          if (pardofs->IsMasterDof(i))
+            {
+              used_my_global.Append(global_nums[i]);
+              used_my_local.Append(i);
+            }
+        }
+
     cout << IM(3) << "num glob dofs = " << num_glob_dofs << endl;
 	
     // range of my master dofs ...
@@ -111,19 +129,21 @@ namespace ngcomp
     HYPRE_IJMatrixSetObjectType(A, HYPRE_PARCSR);
     HYPRE_IJMatrixInitialize(A);
    
+    Array<int> cols_global;
+    Array<double> values_global;
 
-    for( int i = 0; i < mat.Height(); i++)
+    for (int i = 0; i < mat.Height(); i++)
       {
 	int row = global_nums[i];
 	if (row == -1) continue;
 
 	FlatArray<int> cols = mat.GetRowIndices(i);
 	FlatVector<double> values = mat.GetRowValues(i);
-      
-	Array<int> cols_global;
-	Array<double> values_global;
 
-	for( int j = 0; j < cols.Size(); j++)
+        cols_global.SetSize0();
+        values_global.SetSize0();
+
+	for (int j = 0; j < cols.Size(); j++)
 	  if (global_nums[cols[j]] != -1)
 	    {
 	      cols_global.Append (global_nums[cols[j]]);
@@ -134,6 +154,8 @@ namespace ngcomp
 	HYPRE_IJMatrixAddToValues(A, 1, &size, &row, cols_global.Data(), values_global.Data());
       }
 
+
+    
     HYPRE_IJMatrixAssemble(A);
     HYPRE_IJMatrixGetObject(A, (void**) &parcsr_A);
     // HYPRE_IJMatrixPrint(A, "IJ.out.A");
@@ -171,86 +193,54 @@ namespace ngcomp
     NgMPI_Comm comm = pardofs->GetCommunicator();
 
     f.Distribute();
-    u.SetParallelStatus(DISTRIBUTED);
     
     HYPRE_IJVector b;
     HYPRE_ParVector par_b;
     HYPRE_IJVector x;
     HYPRE_ParVector par_x;
 
-    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper,&b);
+    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper, &b);
     HYPRE_IJVectorSetObjectType(b, HYPRE_PARCSR);
     HYPRE_IJVectorInitialize(b);
 
-    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper,&x);
+    HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper, &x);
     HYPRE_IJVectorSetObjectType(x, HYPRE_PARCSR);
     HYPRE_IJVectorInitialize(x);
   
-    const FlatVector<double> fvf =f.FVDouble();
+    FlatVector<double> ff =f.FVDouble();
     FlatVector<double> fu =u.FVDouble();
-	
-    Array<int> nzglobal;
-    Array<double> free_f;
-    for(auto i : Range(global_nums.Size()))
-      if (global_nums[i] != -1)
-	{
-	  nzglobal.Append (global_nums[i]);
-	  free_f.Append (fvf(i));
-	}
-        
-    Array<int> setzi;
-    Array<double> zeros;
-    if(iupper>=ilower)
-      for(auto k : Range(ilower,iupper+1))
-	{
-	  setzi.Append(k);
-	  zeros.Append(0.0);
-	}
 
-    int local_size = nzglobal.Size();
+    
+    Vector<double> free_f(used_local.Size());
+    f.GetIndirect (used_local, free_f);
 
-    //HYPRE_IJVectorAddToValues(b, setzi.Size(), &setzi[0], &zeros[0]);
-    //set vector to 0
-    if(setzi.Size())
-      HYPRE_IJVectorSetValues(b, setzi.Size(), &setzi[0], &zeros[0]);
-    //add values
-    if(local_size)
-      HYPRE_IJVectorAddToValues(b, local_size, &nzglobal[0], &free_f[0]);
+    Array<int> setzi(iupper+1-ilower);
+    for (size_t i = 0; i < iupper+1-ilower; i++)
+      setzi[i]=ilower+i;
+    
+    Vector<double> zeros(iupper+1-ilower);
+    zeros = 0.0;
+
+    HYPRE_IJVectorSetValues(b, setzi.Size(), &setzi[0], &zeros[0]);
+    HYPRE_IJVectorAddToValues(b, used_global.Size(), used_global.Data(), free_f.Data());
     HYPRE_IJVectorAssemble(b);
-
-	
     HYPRE_IJVectorGetObject(b, (void **) &par_b);
 
-    if(setzi.Size())
-      HYPRE_IJVectorSetValues(x, setzi.Size(), &setzi[0], &zeros[0]);
+    HYPRE_IJVectorSetValues(x, setzi.Size(), &setzi[0], &zeros[0]);
     HYPRE_IJVectorAssemble(x);
     HYPRE_IJVectorGetObject(x, (void **) &par_x);
    
-    // HYPRE_IJVectorPrint(b, "IJ.out.b");
 
     HYPRE_BoomerAMGSolve(precond, parcsr_A, par_b, par_x);
 
-    // HYPRE_IJVectorPrint(x, "IJ.out.x");
-    
+    Vector<double> hu(iupper-ilower+1);
 
-    int ndof = pardofs->GetNDofLocal();
-    
-    Vector<> hu(iupper-ilower+1);
-    Array<int> locind(iupper-ilower+1);
+    HYPRE_IJVectorGetValues (x, used_my_global.Size(), used_my_global.Data(), hu.Data());
 
-    for (int i = 0, cnt = 0; i < ndof; i++)
-      if (pardofs->IsMasterDof(i) && global_nums[i] != -1)
-	locind[cnt++] = global_nums[i];
-    int lsize = locind.Size();
+    u = 0.0;
+    u.SetParallelStatus(DISTRIBUTED);
+    u.SetIndirect(used_my_local, hu);
     
-    HYPRE_IJVectorGetValues (x, lsize, &locind[0], &hu(0));
-    
-    for (int i = 0, cnt = 0; i < ndof; i++)
-      if (pardofs->IsMasterDof(i) && global_nums[i] != -1)
-	fu(i) = hu(cnt++);
-      else
-	fu(i) = 0.0;
-
     HYPRE_IJVectorDestroy(x);
     HYPRE_IJVectorDestroy(b);
     

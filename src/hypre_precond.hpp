@@ -18,6 +18,7 @@
 
 namespace ngcomp
 {
+
   
   class HyprePreconditioner : public Preconditioner
   {
@@ -28,6 +29,8 @@ namespace ngcomp
     HYPRE_ParCSRMatrix parcsr_A;
 
     Array<int> global_nums;
+    Array<int> used_global, used_local, used_my_global, used_my_local;
+    
     int ilower, iupper;
     shared_ptr<BitArray> freedofs;
     shared_ptr<ParallelDofs> pardofs;
