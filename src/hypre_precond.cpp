@@ -73,7 +73,20 @@ namespace ngcomp
       throw Exception ("Please use fully stored sparse matrix for hypre (bf -nonsymmetric)");
 
     pardofs = pmat.GetParallelDofs ();
-    NgMPI_Comm comm = pardofs->GetCommunicator();
+    NgMPI_Comm comm_all = pardofs->GetCommunicator();
+
+    Array<int> workers(comm_all.Size()-1);
+    for (int i = 0; i < workers.Size(); i++)
+      workers[i] = i+1;
+    comm = comm_all.SubCommunicator(workers);
+    
+    if (comm_all.Rank() == 0)
+      {
+        global_nums.SetSize(0);
+        pardofs->ScatterDofData (global_nums);        
+        return;
+      }
+    
     int ndof = pardofs->GetNDofLocal();
 
     global_nums.SetSize(ndof);
@@ -190,10 +203,18 @@ namespace ngcomp
   {
     static Timer t("hypre mult");
     RegionTimer reg(t);
-    NgMPI_Comm comm = pardofs->GetCommunicator();
 
     f.Distribute();
+
+    if (pardofs->GetCommunicator().Rank() == 0)
+      {
+        u = 0.0;
+        u.SetParallelStatus(DISTRIBUTED);
+        u.Cumulate();
+        return;
+      }
     
+
     HYPRE_IJVector b;
     HYPRE_ParVector par_b;
     HYPRE_IJVector x;
@@ -221,18 +242,17 @@ namespace ngcomp
     Vector<double> zeros(iupper+1-ilower);
     zeros = 0.0;
 
-    HYPRE_IJVectorSetValues(b, setzi.Size(), &setzi[0], &zeros[0]);
+    HYPRE_IJVectorSetValues(b, setzi.Size(), setzi.Data(), zeros.Data());
     HYPRE_IJVectorAddToValues(b, used_global.Size(), used_global.Data(), free_f.Data());
     HYPRE_IJVectorAssemble(b);
     HYPRE_IJVectorGetObject(b, (void **) &par_b);
 
-    HYPRE_IJVectorSetValues(x, setzi.Size(), &setzi[0], &zeros[0]);
+    HYPRE_IJVectorSetValues(x, setzi.Size(), setzi.Data(), zeros.Data());
     HYPRE_IJVectorAssemble(x);
     HYPRE_IJVectorGetObject(x, (void **) &par_x);
    
-
     HYPRE_BoomerAMGSolve(precond, parcsr_A, par_b, par_x);
-
+    
     Vector<double> hu(iupper-ilower+1);
 
     HYPRE_IJVectorGetValues (x, used_my_global.Size(), used_my_global.Data(), hu.Data());
