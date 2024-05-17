@@ -35,14 +35,23 @@ namespace ngcomp
     shared_ptr<BitArray> freedofs;
     shared_ptr<ParallelDofs> pardofs;
 
+    // null-space vector (now one, soon multiple)
+    shared_ptr<MultiVector> nullspace;
+    HYPRE_IJVector nullspace_vec;
+    HYPRE_ParVector par_nullspace_vec;
+    
+    
   public:
     
-    HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs); 
+    HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs);
+    HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs, shared_ptr<MultiVector> anullspace); 
     HyprePreconditioner (shared_ptr<BilinearForm> bfa, const Flags & aflags,
                          const string aname = "precond");
 
     ~HyprePreconditioner ();
-	
+
+    void SetNullSpace (shared_ptr<MultiVector> mv);
+    
     virtual void FinalizeLevel (const ngla::BaseMatrix * mat = NULL) override;
     virtual void Update() override;
     virtual void Mult (const BaseVector & f, BaseVector & u) const override;

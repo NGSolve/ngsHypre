@@ -27,9 +27,20 @@ namespace ngcomp
   HyprePreconditioner :: HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs)
     : Preconditioner(shared_ptr<BilinearForm>(nullptr), Flags("not_register_for_auto_update"))
   {
-    freedofs = afreedofs; 
+    freedofs = afreedofs;
     Setup (matrix);
   }
+
+
+  HyprePreconditioner :: HyprePreconditioner (const BaseMatrix & matrix, const shared_ptr<BitArray> afreedofs,
+                                              shared_ptr<MultiVector> anullspace)
+    : Preconditioner(shared_ptr<BilinearForm>(nullptr), Flags("not_register_for_auto_update"))
+  {
+    freedofs = afreedofs;
+    nullspace = anullspace;
+    Setup (matrix);
+  }
+
   
   HyprePreconditioner :: HyprePreconditioner (shared_ptr<BilinearForm> abfa, const Flags & aflags,
 					      const string aname)
@@ -44,7 +55,11 @@ namespace ngcomp
     ;
   }
   
-  
+  void HyprePreconditioner :: SetNullSpace (shared_ptr<MultiVector> mv)
+  {
+    cout << "setnullspace, size = " << mv->Size() << endl;
+    nullspace = mv;
+  }
   
   void HyprePreconditioner :: Update()
   {
@@ -177,11 +192,49 @@ namespace ngcomp
     HYPRE_BoomerAMGSetTol(precond, 0.0);      /* conv. tolerance */
     HYPRE_BoomerAMGSetMaxIter(precond,1);
 
+    if (nullspace)
+      {
+        cout << "have nullspace-multivec" << endl;
+        // with HYPRE_BoomerAMGSetInterpVectors and HYPRE_BoomerAMGSetInterpVecVariant. T
 
-    // with HYPRE_BoomerAMGSetInterpVectors and HYPRE_BoomerAMGSetInterpVecVariant. T
+        // assume we have 1 vector, for the moment
+        HYPRE_IJVectorCreate(NG_MPI_Native(comm), ilower, iupper, &nullspace_vec);
+        HYPRE_IJVectorSetObjectType(nullspace_vec, HYPRE_PARCSR);
+        HYPRE_IJVectorInitialize(nullspace_vec);
+
+        Vector<double> my_nullspace(used_my_local.Size());
+        (*nullspace)[0] -> GetIndirect (used_my_local, my_nullspace);
+
+        Array<int> setzi(iupper+1-ilower);
+        for (size_t i = 0; i < iupper+1-ilower; i++)
+          setzi[i]=ilower+i;
+        
+        HYPRE_IJVectorSetValues(nullspace_vec, my_nullspace.Size(), &setzi[0], my_nullspace.Data());
+        // HYPRE_IJVectorAddToValues(b, used_global.Size(), used_global.Data(), free_f.Data());
+        HYPRE_IJVectorAssemble(nullspace_vec);
+        HYPRE_IJVectorGetObject(nullspace_vec, (void **) &par_nullspace_vec);
+
+        HYPRE_IJVectorPrint(nullspace_vec, "IJ.out.nullspace");
+
+        
+        // https://github.com/mfem/mfem/blob/7c296d00d8a770e9f569e4db9d7e6d415902a886/linalg/hypre.cpp#L5238
+        HYPRE_BoomerAMGSetPrintLevel(precond, 3);  /* print solve info + parameters */        
+        HYPRE_BoomerAMGSetNodal(precond, 1); 
+        HYPRE_BoomerAMGSetNodalDiag(precond, 1);
+        HYPRE_BoomerAMGSetCycleRelaxType(precond, 8, 3);
+   
+        HYPRE_BoomerAMGSetAggNumLevels(precond,0);
+        HYPRE_BoomerAMGSetCoarsenType(precond, 8); 
+        HYPRE_BoomerAMGSetInterpVectors(precond, 1, &par_nullspace_vec);
+        HYPRE_BoomerAMGSetInterpVecVariant (precond, 2);
+        cout << "everything set" << endl;
+      }
     
     cout << IM(2) << "Call BoomerAMGSetup" << endl;
+    cout << "call setup" << endl;
     HYPRE_BoomerAMGSetup (precond, parcsr_A, par_b, par_x);
+    cout << "is back" << endl;
+    
   }
 
 
