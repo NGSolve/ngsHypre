@@ -22,6 +22,8 @@ namespace ngcomp
   
   class HyprePreconditioner : public Preconditioner
   {
+    NgMPI_Comm comm;
+
     shared_ptr<BilinearForm> bfa;
 
     HYPRE_Solver precond;
