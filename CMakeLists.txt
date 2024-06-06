@@ -11,40 +11,16 @@ include(ngsolve_addon.cmake)
 add_ngsolve_addon(${addon_name} src/hypre_precond.cpp src/ngsHypre.cpp)
 
 # install the compiled python module and __init__.py ( don't change this )
-set(ADDON_INSTALL_DIR ${python3_library_dir}/${addon_name})
-install(TARGETS ${addon_name} DESTINATION ${ADDON_INSTALL_DIR})
-install(FILES src/__init__.py DESTINATION ${ADDON_INSTALL_DIR})
+install(TARGETS ${addon_name} DESTINATION ${addon_name})
+install(FILES src/__init__.py DESTINATION ${addon_name})
 
 # install additional python files/demos/examples
-install(FILES demos/example1.py DESTINATION ${ADDON_INSTALL_DIR}/demos)
+install(FILES demos/example1.py DESTINATION ${addon_name}/demos)
 
-
-# cmake_minimum_required(VERSION 3.16)
-
-###############################################################################
-# Edit here
-###############################################################################
-
-# make sure the module_name matches the first argument of PYBIND11_MODULE
-#set(module_name ngs_hypre)
-# set(source_files src/hypre_precond.cpp src/ngsHypre.cpp)
-
-###############################################################################
-# STOP editing here
-###############################################################################
-
-# Don't change this
-#project(${module_name})
-# include(ngsolve_addon.cmake)
-
-
-
-
-
-
-
-###############################################################################
-# Fetch and link hypre
+# generate stub files for autocomplete in IDEs
+# this must be done at the very end (such that the stubgen generation happens after the python modules are installed)
+install(CODE ${stubgen_generation_code})
+install(DIRECTORY ${stubgen_directory} DESTINATION ${addon_name})
 
 include(FetchContent)
 FetchContent_Declare(hypre
