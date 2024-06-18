@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.3.3", "pybind11", "pybind11_stubgen", "cmake>=3.26", "netgen-mesher", "ngsolve"]
+requires = ["scikit-build-core>=0.3.3", "pybind11", "pybind11_stubgen", "cmake>=3.26", "netgen-mesher", "ngsolve", "mpi4py"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -8,7 +8,7 @@ version = "1.0.0"
 description="A minimal example for an NGSolve addon"
 readme = "README.md"
 authors = [ { name = "NGSolve" } ]
-requires-python = ">=3.12"
+requires-python = ">=3.8"
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: MIT License",
